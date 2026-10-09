@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+.env
+
+# React
+node_modules/
+dist/
+
+# Environment secrets
+.env.*
+!.env.example
+
+# Generated files
+*.log
+uploads/
+*.sqlite3
+
+# Operating system
+.DS_Store
+Thumbs.db
