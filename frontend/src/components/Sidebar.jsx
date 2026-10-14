@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
 
@@ -82,18 +83,20 @@ function Sidebar({ collapsed, toggleSidebar }) {
       <nav className="navigation">
         <p className="nav-title">WORKSPACE</p>
 
+        {/* Overview */}
         <NavLink
           to="/"
           end
           className={({ isActive }) =>
             isActive ? "nav-item active" : "nav-item"
           }
-          title="Dashboard"
+          title="Overview"
         >
           <span className="nav-icon">🏠</span>
-          <span className="nav-text">Dashboard</span>
+          <span className="nav-text">Overview</span>
         </NavLink>
 
+        {/* Dataset */}
         <NavLink
           to="/dataset"
           className={({ isActive }) =>
@@ -105,6 +108,7 @@ function Sidebar({ collapsed, toggleSidebar }) {
           <span className="nav-text">Dataset</span>
         </NavLink>
 
+        {/* Data Profile */}
         <NavLink
           to="/profile"
           className={({ isActive }) =>
@@ -116,6 +120,7 @@ function Sidebar({ collapsed, toggleSidebar }) {
           <span className="nav-text">Data Profile</span>
         </NavLink>
 
+        {/* Data Cleaning */}
         <NavLink
           to="/cleaning"
           className={({ isActive }) =>
@@ -127,6 +132,7 @@ function Sidebar({ collapsed, toggleSidebar }) {
           <span className="nav-text">Data Cleaning</span>
         </NavLink>
 
+        {/* Analysis */}
         <NavLink
           to="/analysis"
           className={({ isActive }) =>
@@ -137,10 +143,23 @@ function Sidebar({ collapsed, toggleSidebar }) {
           <span className="nav-icon">📊</span>
           <span className="nav-text">Analysis</span>
         </NavLink>
+
+        {/* Dashboards - NEW */}
+        <NavLink
+          to="/dashboards"
+          className={({ isActive }) =>
+            isActive ? "nav-item active" : "nav-item"
+          }
+          title="Dashboards"
+        >
+          <span className="nav-icon">📈</span>
+          <span className="nav-text">Dashboards</span>
+        </NavLink>
       </nav>
 
       {/* Bottom section */}
       <div className="sidebar-bottom">
+        {/* Settings */}
         <NavLink
           to="/settings"
           className={({ isActive }) =>

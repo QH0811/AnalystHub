@@ -14,6 +14,9 @@ import {
   FileText,
   Activity,
   Search,
+  SlidersHorizontal,
+  ChevronDown,
+  X,
 } from "lucide-react";
 
 import {
@@ -52,6 +55,22 @@ const TABS = [
   { id: "statistics", label: "Statistics" },
   { id: "relationships", label: "Relationships" },
   { id: "reports", label: "Reports" },
+];
+
+const CHART_TYPES = [
+  { value: "bar", label: "Bar" },
+  { value: "line", label: "Line" },
+  { value: "pie", label: "Pie" },
+  { value: "scatter", label: "Scatter" },
+  { value: "histogram", label: "Histogram" },
+];
+
+const AGGREGATIONS = [
+  ["sum", "Sum"],
+  ["mean", "Average"],
+  ["count", "Count"],
+  ["min", "Minimum"],
+  ["max", "Maximum"],
 ];
 
 const DEFAULT_FILTERS = {
@@ -145,6 +164,7 @@ function Analysis() {
   const [columnSearch, setColumnSearch] = useState("");
   const [columnTypeFilter, setColumnTypeFilter] = useState("all");
   const [selectedColumn, setSelectedColumn] = useState(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
@@ -209,6 +229,18 @@ function Analysis() {
     loadDataset();
   }, []);
 
+  // Visualizations and Statistics both need a generated analysis,
+  // so create one automatically the first time they are opened.
+  useEffect(() => {
+    const needsAnalysis =
+      activeTab === "visualizations" || activeTab === "statistics";
+
+    if (needsAnalysis && !summary && !analyzing && columns.length > 0) {
+      generateAnalysis();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, summary, columns.length]);
+
   const numericColumns = useMemo(
     () =>
       columns.filter(
@@ -232,6 +264,59 @@ function Analysis() {
       ),
     [columns]
   );
+
+  // Overview: how many columns of each type.
+  const typeBreakdown = useMemo(() => {
+    const counts = {};
+
+    columns.forEach((column) => {
+      const type = getColumnType(column);
+      counts[type] = (counts[type] || 0) + 1;
+    });
+
+    return Object.entries(counts)
+      .map(([type, count]) => ({ type, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [columns]);
+
+  // Overview: columns that contain missing values.
+  const columnsWithMissing = useMemo(
+    () =>
+      columns
+        .map((column) => ({
+          name: getColumnName(column),
+          missing:
+            Number(
+              getStatistic(column, [
+                "missing_values",
+                "missing",
+                "null_count",
+              ])
+            ) || 0,
+        }))
+        .filter((item) => item.missing > 0)
+        .sort((a, b) => b.missing - a.missing),
+    [columns]
+  );
+
+  const totalCells = (Number(analysis?.rows) || 0) * columns.length;
+
+  const totalMissing = columnsWithMissing.reduce(
+    (sum, item) => sum + item.missing,
+    0
+  );
+
+  const completeness = totalCells
+    ? (1 - totalMissing / totalCells) * 100
+    : null;
+
+  const activeFilterCount =
+    (filters.startDate || filters.endDate ? 1 : 0) +
+    (filters.categoryValues.length > 0 ? 1 : 0);
+
+  const aggregationLabel =
+    AGGREGATIONS.find(([value]) => value === filters.aggregation)?.[1] ||
+    "Sum";
 
   const filteredColumns = useMemo(() => {
     const search = columnSearch.trim().toLowerCase();
@@ -474,32 +559,76 @@ function Analysis() {
             <div className="analysis-card-heading">
               <div>
                 <h2>Dataset Overview</h2>
-                <p>A summary of your uploaded dataset.</p>
+                <p>
+                  {analysis?.filename || "Current dataset"} · structure
+                  and data quality at a glance.
+                </p>
               </div>
               <Database size={22} color="#818cf8" />
             </div>
 
-            <div className="analysis-result-kpis">
-              <ResultCard
-                icon={<Database size={18} />}
-                label="Total Records"
-                value={formatNumber(analysis?.rows)}
-              />
-              <ResultCard
-                icon={<Layers3 size={18} />}
-                label="Total Columns"
-                value={formatNumber(analysis?.columns ?? columns.length)}
-              />
-              <ResultCard
-                icon={<Hash size={18} />}
-                label="Numeric Columns"
-                value={numericColumns.length}
-              />
-              <ResultCard
-                icon={<CalendarDays size={18} />}
-                label="Date Columns"
-                value={dateColumns.length}
-              />
+            <div className="overview-grid">
+              {/* Column types */}
+              <div className="overview-block">
+                <h3>Column types</h3>
+
+                {typeBreakdown.map(({ type, count }) => (
+                  <div className="overview-bar-row" key={type}>
+                    <span className="overview-bar-label">{type}</span>
+                    <div className="overview-bar-track">
+                      <div
+                        className="overview-bar-fill"
+                        style={{
+                          width: `${(count / columns.length) * 100}%`,
+                        }}
+                      />
+                    </div>
+                    <strong>{count}</strong>
+                  </div>
+                ))}
+              </div>
+
+              {/* Data quality */}
+              <div className="overview-block">
+                <h3>Data quality</h3>
+
+                <div className="quality-score">
+                  <strong>
+                    {completeness === null
+                      ? "—"
+                      : `${completeness.toFixed(1)}%`}
+                  </strong>
+                  <span>complete</span>
+                </div>
+
+                <div className="overview-bar-track">
+                  <div
+                    className={`overview-bar-fill ${
+                      completeness !== null && completeness < 90
+                        ? "warn"
+                        : "good"
+                    }`}
+                    style={{ width: `${completeness ?? 0}%` }}
+                  />
+                </div>
+
+                {columnsWithMissing.length === 0 ? (
+                  <p className="overview-ok">
+                    No missing values found.
+                  </p>
+                ) : (
+                  <ul className="missing-list">
+                    {columnsWithMissing.slice(0, 4).map((item) => (
+                      <li key={item.name}>
+                        <span>{item.name}</span>
+                        <strong>
+                          {formatNumber(item.missing)} missing
+                        </strong>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
           </section>
 
@@ -586,10 +715,7 @@ function Analysis() {
                     {selected && (
                       <div className="column-dropdown">
                         <div className="column-dropdown-grid">
-                          <Detail
-                            label="Data type"
-                            value={type}
-                          />
+                          <Detail label="Data type" value={type} />
                           <Detail
                             label="Missing values"
                             value={formatNumber(
@@ -643,6 +769,7 @@ function Analysis() {
                                   : previous.yColumn,
                             }));
 
+                            setSummary(null);
                             setActiveTab("visualizations");
                             setSelectedColumn(null);
                           }}
@@ -668,327 +795,402 @@ function Analysis() {
 
       {/* VISUALIZATIONS */}
       {activeTab === "visualizations" && (
-        <div className="analysis-workspace">
-          <aside className="analysis-filter-panel">
-            <div className="analysis-panel-title">
-              <div className="analysis-title-icon">
-                <Filter size={18} />
-              </div>
-              <div>
-                <h2>Analysis Filters</h2>
-                <p>Filter and configure your analysis.</p>
-              </div>
-              <button
-                type="button"
-                className="analysis-reset"
-                onClick={resetFilters}
+        <div className="analysis-tab-page viz-page">
+          {/* Control bar */}
+          <section className="analysis-card viz-toolbar">
+            <div className="viz-toolbar-top">
+              <div
+                className="viz-chart-types"
+                role="group"
+                aria-label="Chart type"
               >
-                Reset
-              </button>
-            </div>
-
-            <div className="analysis-filter-section">
-              <h3>
-                <CalendarDays size={14} />
-                Date range <span>(optional)</span>
-              </h3>
-
-              <label>Date column</label>
-              <select
-                value={filters.dateColumn}
-                onChange={(event) =>
-                  updateFilter("dateColumn", event.target.value)
-                }
-              >
-                <option value="">No date filter</option>
-                {dateColumns.map((column) => (
-                  <option
-                    key={getColumnName(column)}
-                    value={getColumnName(column)}
-                  >
-                    {getColumnName(column)}
-                  </option>
-                ))}
-              </select>
-
-              <div className="analysis-date-grid">
-                <div>
-                  <label>Start date</label>
-                  <input
-                    type="date"
-                    value={filters.startDate}
-                    onChange={(event) =>
-                      updateFilter("startDate", event.target.value)
-                    }
-                    disabled={!filters.dateColumn}
-                  />
-                </div>
-                <div>
-                  <label>End date</label>
-                  <input
-                    type="date"
-                    value={filters.endDate}
-                    onChange={(event) =>
-                      updateFilter("endDate", event.target.value)
-                    }
-                    disabled={!filters.dateColumn}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="analysis-filter-section">
-              <h3>
-                <Tag size={14} />
-                Filter by category <span>(optional)</span>
-              </h3>
-
-              <label>Category column</label>
-              <select
-                value={filters.categoryColumn}
-                onChange={(event) => {
-                  updateFilter("categoryColumn", event.target.value);
-                  updateFilter("categoryValues", []);
-                }}
-              >
-                <option value="">No category filter</option>
-                {categoricalColumns.map((column) => (
-                  <option
-                    key={getColumnName(column)}
-                    value={getColumnName(column)}
-                  >
-                    {getColumnName(column)}
-                  </option>
-                ))}
-              </select>
-
-              <p className="analysis-field-hint">
-                Category-value selection can be added when the backend
-                exposes the available values for each column.
-              </p>
-            </div>
-
-            <div className="analysis-filter-section">
-              <h3>
-                <BarChart3 size={14} />
-                Chart configuration
-              </h3>
-
-              <label>Chart type</label>
-              <select
-                value={filters.chartType}
-                onChange={(event) =>
-                  updateFilter("chartType", event.target.value)
-                }
-              >
-                <option value="bar">Bar Chart</option>
-                <option value="line">Line Chart</option>
-                <option value="pie">Pie / Donut Chart</option>
-                <option value="histogram">Histogram</option>
-                <option value="scatter">Scatter Plot</option>
-              </select>
-
-              <div className="analysis-field-grid">
-                <div>
-                  <label>X-axis column</label>
-                  <select
-                    value={filters.xColumn}
-                    onChange={(event) =>
-                      updateFilter("xColumn", event.target.value)
-                    }
-                  >
-                    {columns.map((column) => (
-                      <option
-                        key={getColumnName(column)}
-                        value={getColumnName(column)}
-                      >
-                        {getColumnName(column)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label>Y-axis column</label>
-                  <select
-                    value={filters.yColumn}
-                    onChange={(event) =>
-                      updateFilter("yColumn", event.target.value)
-                    }
-                  >
-                    <option value="">Count records</option>
-                    {numericColumns.map((column) => (
-                      <option
-                        key={getColumnName(column)}
-                        value={getColumnName(column)}
-                      >
-                        {getColumnName(column)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <label>Aggregation method</label>
-              <div className="analysis-aggregation-grid">
-                {[
-                  ["sum", "Sum"],
-                  ["mean", "Average"],
-                  ["count", "Count"],
-                  ["min", "Minimum"],
-                  ["max", "Maximum"],
-                ].map(([value, label]) => (
+                {CHART_TYPES.map(({ value, label }) => (
                   <button
                     key={value}
                     type="button"
                     className={
-                      filters.aggregation === value
-                        ? "analysis-aggregation active"
-                        : "analysis-aggregation"
+                      filters.chartType === value
+                        ? "viz-type active"
+                        : "viz-type"
                     }
-                    onClick={() => updateFilter("aggregation", value)}
+                    onClick={() => updateFilter("chartType", value)}
                   >
                     {label}
                   </button>
                 ))}
               </div>
 
-              <label>Trend breakdown</label>
-              <select
-                value={filters.breakdown}
-                onChange={(event) =>
-                  updateFilter("breakdown", event.target.value)
-                }
-              >
-                <option value="day">Daily</option>
-                <option value="week">Weekly</option>
-                <option value="month">Monthly</option>
-                <option value="quarter">Quarterly</option>
-                <option value="year">Yearly</option>
-              </select>
-            </div>
-
-            <button
-              type="button"
-              className="analysis-button primary generate-button"
-              onClick={generateAnalysis}
-              disabled={analyzing}
-            >
-              <BarChart3 size={16} />
-              {analyzing ? "Generating..." : "Generate Analysis"}
-            </button>
-          </aside>
-
-          <main className="analysis-results">
-            <div className="analysis-result-kpis">
-              <ResultCard
-                icon={<Database size={18} />}
-                label="Total"
-                value={formatNumber(summary?.total)}
-              />
-              <ResultCard
-                icon={<Table2 size={18} />}
-                label="Records"
-                value={formatNumber(summary?.record_count)}
-              />
-              <ResultCard
-                icon={<TrendingUp size={18} />}
-                label="Average"
-                value={formatNumber(summary?.average)}
-              />
-              <ResultCard
-                icon={<Tag size={18} />}
-                label="Unique values"
-                value={formatNumber(summary?.unique_categories)}
-              />
-            </div>
-
-            <section className="analysis-card">
-              <div className="analysis-card-heading">
-                <div>
-                  <h2>{filters.yColumn || "Record Count"} Trend</h2>
-                  <p>
-                    {filters.aggregation} by{" "}
-                    {filters.xColumn || "selected column"}
-                  </p>
-                </div>
+              <div className="viz-toolbar-actions">
                 <button
                   type="button"
                   className="analysis-button secondary"
-                  onClick={exportReport}
+                  onClick={() => setFiltersOpen((open) => !open)}
+                  aria-expanded={filtersOpen}
                 >
-                  <Download size={14} />
-                  Export Summary
+                  <SlidersHorizontal size={14} />
+                  Filters
+                  {activeFilterCount > 0 && (
+                    <span className="viz-badge">{activeFilterCount}</span>
+                  )}
+                  <ChevronDown
+                    size={14}
+                    className={filtersOpen ? "viz-chevron open" : "viz-chevron"}
+                  />
+                </button>
+
+                <button
+                  type="button"
+                  className="analysis-button secondary"
+                  onClick={resetFilters}
+                >
+                  Reset
+                </button>
+
+                <button
+                  type="button"
+                  className="analysis-button primary"
+                  onClick={generateAnalysis}
+                  disabled={analyzing}
+                >
+                  <BarChart3 size={15} />
+                  {analyzing ? "Generating..." : "Generate"}
                 </button>
               </div>
+            </div>
 
-              <div className="analysis-chart large">
-                {trendData.length ? (
+            <div className="viz-fields">
+              <div className="viz-field">
+                <label htmlFor="viz-x">X-axis</label>
+                <select
+                  id="viz-x"
+                  value={filters.xColumn}
+                  onChange={(event) =>
+                    updateFilter("xColumn", event.target.value)
+                  }
+                >
+                  {columns.map((column) => (
+                    <option
+                      key={getColumnName(column)}
+                      value={getColumnName(column)}
+                    >
+                      {getColumnName(column)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="viz-field">
+                <label htmlFor="viz-y">Y-axis</label>
+                <select
+                  id="viz-y"
+                  value={filters.yColumn}
+                  onChange={(event) =>
+                    updateFilter("yColumn", event.target.value)
+                  }
+                >
+                  <option value="">Count records</option>
+                  {numericColumns.map((column) => (
+                    <option
+                      key={getColumnName(column)}
+                      value={getColumnName(column)}
+                    >
+                      {getColumnName(column)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="viz-field">
+                <label htmlFor="viz-agg">Calculate</label>
+                <select
+                  id="viz-agg"
+                  value={filters.aggregation}
+                  onChange={(event) =>
+                    updateFilter("aggregation", event.target.value)
+                  }
+                >
+                  {AGGREGATIONS.map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="viz-field">
+                <label htmlFor="viz-breakdown">Group by time</label>
+                <select
+                  id="viz-breakdown"
+                  value={filters.breakdown}
+                  onChange={(event) =>
+                    updateFilter("breakdown", event.target.value)
+                  }
+                >
+                  <option value="day">Daily</option>
+                  <option value="week">Weekly</option>
+                  <option value="month">Monthly</option>
+                  <option value="quarter">Quarterly</option>
+                  <option value="year">Yearly</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Collapsible filters */}
+            {filtersOpen && (
+              <div className="viz-filters">
+                <div className="viz-filter-group">
+                  <h3>
+                    <CalendarDays size={14} />
+                    Date range
+                  </h3>
+
+                  <div className="viz-filter-row">
+                    <div className="viz-field">
+                      <label htmlFor="viz-date-col">Date column</label>
+                      <select
+                        id="viz-date-col"
+                        value={filters.dateColumn}
+                        onChange={(event) =>
+                          updateFilter("dateColumn", event.target.value)
+                        }
+                      >
+                        <option value="">No date filter</option>
+                        {dateColumns.map((column) => (
+                          <option
+                            key={getColumnName(column)}
+                            value={getColumnName(column)}
+                          >
+                            {getColumnName(column)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="viz-field">
+                      <label htmlFor="viz-start">From</label>
+                      <input
+                        id="viz-start"
+                        type="date"
+                        value={filters.startDate}
+                        disabled={!filters.dateColumn}
+                        onChange={(event) =>
+                          updateFilter("startDate", event.target.value)
+                        }
+                      />
+                    </div>
+
+                    <div className="viz-field">
+                      <label htmlFor="viz-end">To</label>
+                      <input
+                        id="viz-end"
+                        type="date"
+                        value={filters.endDate}
+                        disabled={!filters.dateColumn}
+                        onChange={(event) =>
+                          updateFilter("endDate", event.target.value)
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="viz-filter-group">
+                  <h3>
+                    <Tag size={14} />
+                    Category
+                  </h3>
+
+                  <div className="viz-filter-row">
+                    <div className="viz-field">
+                      <label htmlFor="viz-cat-col">Category column</label>
+                      <select
+                        id="viz-cat-col"
+                        value={filters.categoryColumn}
+                        onChange={(event) => {
+                          updateFilter("categoryColumn", event.target.value);
+                          updateFilter("categoryValues", []);
+                        }}
+                      >
+                        <option value="">No category filter</option>
+                        {categoricalColumns.map((column) => (
+                          <option
+                            key={getColumnName(column)}
+                            value={getColumnName(column)}
+                          >
+                            {getColumnName(column)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <p className="analysis-field-hint viz-hint">
+                      Choosing which category values to keep needs the
+                      backend to return the values for each column.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Active filter chips */}
+            {activeFilterCount > 0 && (
+              <div className="viz-chips">
+                {(filters.startDate || filters.endDate) && (
+                  <span className="viz-chip">
+                    {filters.dateColumn}: {filters.startDate || "start"} to{" "}
+                    {filters.endDate || "end"}
+                    <button
+                      type="button"
+                      aria-label="Clear date range"
+                      onClick={() => {
+                        updateFilter("startDate", "");
+                        updateFilter("endDate", "");
+                      }}
+                    >
+                      <X size={12} />
+                    </button>
+                  </span>
+                )}
+
+                {filters.categoryValues.length > 0 && (
+                  <span className="viz-chip">
+                    {filters.categoryColumn}: {filters.categoryValues.length}{" "}
+                    selected
+                    <button
+                      type="button"
+                      aria-label="Clear category filter"
+                      onClick={() => updateFilter("categoryValues", [])}
+                    >
+                      <X size={12} />
+                    </button>
+                  </span>
+                )}
+              </div>
+            )}
+          </section>
+
+          {/* Result numbers */}
+          <div className="analysis-result-kpis">
+            <ResultCard
+              icon={<Database size={18} />}
+              label="Total"
+              value={formatNumber(summary?.total)}
+            />
+            <ResultCard
+              icon={<Table2 size={18} />}
+              label="Records"
+              value={formatNumber(summary?.record_count)}
+            />
+            <ResultCard
+              icon={<TrendingUp size={18} />}
+              label="Average"
+              value={formatNumber(summary?.average)}
+            />
+            <ResultCard
+              icon={<Tag size={18} />}
+              label="Unique values"
+              value={formatNumber(summary?.unique_categories)}
+            />
+          </div>
+
+          {/* Main chart */}
+          <section className="analysis-card">
+            <div className="analysis-card-heading">
+              <div>
+                <h2>
+                  {aggregationLabel} of {filters.yColumn || "records"} by{" "}
+                  {filters.xColumn || "selected column"}
+                </h2>
+                <p>
+                  {analyzing
+                    ? "Updating chart..."
+                    : "Change the chart type above to switch views instantly."}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="analysis-button secondary"
+                onClick={exportReport}
+              >
+                <Download size={14} />
+                Export summary
+              </button>
+            </div>
+
+            <div className="analysis-chart viz-main-chart">
+              {trendData.length ? (
+                <ChartRenderer
+                  type={filters.chartType}
+                  data={trendData}
+                  xKey="label"
+                  yKey="value"
+                />
+              ) : (
+                <EmptyChart
+                  message={
+                    analyzing
+                      ? "Generating your chart..."
+                      : "Pick your columns, then select Generate."
+                  }
+                />
+              )}
+            </div>
+          </section>
+
+          {/* Breakdowns */}
+          <div className="analysis-breakdown-grid">
+            <section className="analysis-card">
+              <h2 className="viz-card-title">By year</h2>
+              <div className="analysis-chart medium">
+                {yearData.length ? (
                   <ChartRenderer
-                    type={filters.chartType}
-                    data={trendData}
+                    type="bar"
+                    data={yearData}
                     xKey="label"
                     yKey="value"
                   />
                 ) : (
-                  <EmptyChart message="Choose your filters and generate an analysis." />
+                  <EmptyChart message="No yearly breakdown available." />
                 )}
               </div>
             </section>
 
-            <div className="analysis-breakdown-grid">
-              <section className="analysis-card">
-                <h2>Breakdown by Year</h2>
-                <div className="analysis-chart medium">
-                  {yearData.length ? (
-                    <ChartRenderer
-                      type="bar"
-                      data={yearData}
-                      xKey="label"
-                      yKey="value"
-                    />
-                  ) : (
-                    <EmptyChart message="No yearly breakdown available." />
-                  )}
-                </div>
-              </section>
-
-              <section className="analysis-card">
-                <h2>Category Breakdown</h2>
-                <div className="analysis-chart medium">
-                  {categoryData.length ? (
-                    <ChartRenderer
-                      type="bar"
-                      data={categoryData}
-                      xKey="label"
-                      yKey="value"
-                      horizontal
-                    />
-                  ) : (
-                    <EmptyChart message="No category breakdown available." />
-                  )}
-                </div>
-              </section>
-            </div>
-
             <section className="analysis-card">
-              <div className="analysis-card-heading">
-                <div>
-                  <h2>Filtered Data Preview</h2>
-                  <p>Showing up to 100 records.</p>
-                </div>
-                <button
-                  type="button"
-                  className="analysis-button secondary"
-                  onClick={exportCSV}
-                >
-                  <Download size={14} />
-                  Export CSV
-                </button>
+              <h2 className="viz-card-title">By category</h2>
+              <div className="analysis-chart medium">
+                {categoryData.length ? (
+                  <ChartRenderer
+                    type="bar"
+                    data={categoryData}
+                    xKey="label"
+                    yKey="value"
+                    horizontal
+                  />
+                ) : (
+                  <EmptyChart message="No category breakdown available." />
+                )}
               </div>
-              <DataPreview rows={previewRows} />
             </section>
-          </main>
+          </div>
+
+          {/* Data preview */}
+          <section className="analysis-card">
+            <div className="analysis-card-heading">
+              <div>
+                <h2>Filtered data</h2>
+                <p>Showing up to 100 records.</p>
+              </div>
+              <button
+                type="button"
+                className="analysis-button secondary"
+                onClick={exportCSV}
+              >
+                <Download size={14} />
+                Export CSV
+              </button>
+            </div>
+            <DataPreview rows={previewRows} />
+          </section>
         </div>
       )}
 
@@ -1000,22 +1202,42 @@ function Analysis() {
               <div>
                 <h2>Statistical Summary</h2>
                 <p>
-                  Summary statistics from your generated analysis.
+                  Summary statistics for {filters.yColumn || "record count"}{" "}
+                  using your current filters.
                 </p>
               </div>
               <Activity size={22} color="#818cf8" />
             </div>
 
-            <div className="analysis-result-kpis">
-              <ResultCard label="Total" value={formatNumber(summary?.total)} />
-              <ResultCard label="Average" value={formatNumber(summary?.average)} />
-              <ResultCard label="Minimum" value={formatNumber(summary?.minimum)} />
-              <ResultCard label="Maximum" value={formatNumber(summary?.maximum)} />
-            </div>
+            {analyzing ? (
+              <div className="analysis-message">
+                <RefreshCw size={18} />
+                Calculating statistics...
+              </div>
+            ) : (
+              <div className="analysis-result-kpis">
+                <ResultCard
+                  label="Total"
+                  value={formatNumber(summary?.total)}
+                />
+                <ResultCard
+                  label="Average"
+                  value={formatNumber(summary?.average)}
+                />
+                <ResultCard
+                  label="Minimum"
+                  value={formatNumber(summary?.minimum)}
+                />
+                <ResultCard
+                  label="Maximum"
+                  value={formatNumber(summary?.maximum)}
+                />
+              </div>
+            )}
 
             <p className="analysis-note">
-              Generate an analysis in Visualizations to refresh these
-              results. Statistical values depend on backend support.
+              Change the filters in Visualizations and select Generate
+              Analysis to refresh these results.
             </p>
           </section>
         </div>

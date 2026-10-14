@@ -10,7 +10,8 @@ import {
 import Sidebar from "./components/Sidebar";
 import Topbar from "./components/Topbar";
 
-import Dashboard from "./pages/Dashboard";
+import Overview from "./pages/Overview";
+import Dashboards from "./pages/Dashboards";
 import Dataset from "./pages/Dataset";
 import Profile from "./pages/Profile";
 import Cleaning from "./pages/Cleaning";
@@ -18,24 +19,16 @@ import Analysis from "./pages/Analysis";
 import MyProfile from "./pages/MyProfile";
 import Settings from "./pages/Settings";
 
-
 function App() {
-
-  // Theme state
   const [darkMode, setDarkMode] = useState(
     localStorage.getItem("theme") === "dark"
   );
 
-  // Sidebar state
   const [sidebarCollapsed, setSidebarCollapsed] =
     useState(false);
 
-
-  // Toggle theme
   function toggleTheme() {
-
     const newMode = !darkMode;
-
     setDarkMode(newMode);
 
     localStorage.setItem(
@@ -44,39 +37,23 @@ function App() {
     );
   }
 
-
-  // Toggle sidebar
   function toggleSidebar() {
-
-    setSidebarCollapsed(
-      (current) => !current
-    );
-
+    setSidebarCollapsed((current) => !current);
   }
-
 
   return (
     <BrowserRouter>
-
       <div
         className={[
           "app",
           darkMode ? "dark-mode" : "",
-          sidebarCollapsed
-            ? "sidebar-collapsed"
-            : "",
+          sidebarCollapsed ? "sidebar-collapsed" : "",
         ].join(" ")}
       >
-
-        {/* Sidebar */}
-
         <Sidebar
           collapsed={sidebarCollapsed}
           toggleSidebar={toggleSidebar}
         />
-
-
-        {/* Main area */}
 
         <div
           className={
@@ -85,24 +62,21 @@ function App() {
               : "main-area"
           }
         >
-
-          {/* Topbar */}
-
           <Topbar
             darkMode={darkMode}
             toggleTheme={toggleTheme}
           />
 
-
-          {/* Page content */}
-
           <main className="main-content">
-
             <Routes>
-
               <Route
                 path="/"
-                element={<Dashboard />}
+                element={<Overview />}
+              />
+
+              <Route
+                path="/dashboards"
+                element={<Dashboards />}
               />
 
               <Route
@@ -133,24 +107,18 @@ function App() {
               <Route
                 path="/settings"
                 element={
-                <Settings
-                  darkMode={darkMode}
-                  toggleTheme={toggleTheme}
-                />
+                  <Settings
+                    darkMode={darkMode}
+                    toggleTheme={toggleTheme}
+                  />
                 }
               />
-              
             </Routes>
-
           </main>
-
         </div>
-
       </div>
-
     </BrowserRouter>
   );
 }
-
 
 export default App;

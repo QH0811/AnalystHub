@@ -1,3 +1,4 @@
+
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import NotificationCenter from "./NotificationCenter";
@@ -78,10 +79,10 @@ function Topbar({ darkMode, toggleTheme }) {
   // Available pages
   const searchItems = [
     {
-      title: "Dashboard",
+      title: "Overview",
       description: "View your dataset overview",
       path: "/",
-      keywords: "home overview summary",
+      keywords: "home dashboard summary",
       icon: "🏠",
     },
     {
@@ -260,7 +261,7 @@ function Topbar({ darkMode, toggleTheme }) {
                 <span>🔎</span>
                 <strong>No matching pages</strong>
                 <small>
-                  Try Dashboard, Dataset, Profile, Cleaning or Analysis.
+                  Try Overview, Dataset, Profile, Cleaning or Analysis.
                 </small>
               </div>
             )}
@@ -278,7 +279,7 @@ function Topbar({ darkMode, toggleTheme }) {
           title={
             darkMode
               ? "Switch to Light Mode"
-              : "Switch to Dark Mode"
+              : "Switch to dark mode"
           }
           aria-label={
             darkMode
@@ -293,7 +294,7 @@ function Topbar({ darkMode, toggleTheme }) {
           <span className="toggle-circle" />
         </button>
 
-        {/* Notification Center: one bell only */}
+        {/* Notification Center */}
         <NotificationCenter />
 
         {/* Profile Dropdown */}
